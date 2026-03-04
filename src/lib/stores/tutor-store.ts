@@ -48,6 +48,10 @@ interface TutorActions {
   setShowWelcome: (show: boolean) => void;
   setSpeechRate: (rate: number) => void;
 
+  // ✅ New: request flags (part of store state too)
+  stopRequested: boolean;
+  resetRequested: boolean;
+
   // ✅ New: global requests (header buttons can trigger; page.tsx performs)
   requestStop: () => void;
   requestReset: () => void;
