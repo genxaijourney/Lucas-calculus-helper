@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { MainLayout } from '@/components/layout/main-layout';
 import { Whiteboard } from '@/components/whiteboard/whiteboard';
 import { ConversationPanel } from '@/components/conversation/conversation-panel';
@@ -16,11 +16,20 @@ import { useSpeechSynthesis } from '@/hooks/use-speech-synthesis';
 import { useTutorApi } from '@/hooks/use-tutor-api';
 import { useWhiteboardSync } from '@/hooks/use-whiteboard-sync';
 import { useTutorStore } from '@/lib/stores/tutor-store';
-import { identifyWeaknesses } from '@/lib/knowledge/adaptive-difficulty';
-import { determineDifficulty } from '@/lib/knowledge/adaptive-difficulty';
+import { identifyWeaknesses, determineDifficulty } from '@/lib/knowledge/adaptive-difficulty';
 import { generateId } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { PauseCircle, Volume2, VolumeX } from 'lucide-react';
 
 export default function Home() {
+  // Hydration guard: keep initial render deterministic so SSR matches first client render
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  // Local UI preference: speak on/off
+  // Keep it local so we don’t introduce new SSR/localStorage hydration issues.
+  const [speakEnabled, setSpeakEnabled] = useState(true);
+
   const {
     voiceState,
     setVoiceState,
@@ -37,10 +46,27 @@ export default function Home() {
     applyTopicUpdate,
     recordError,
     startSession,
+
+    // From store (you added these)
+    stopRequested,
+    resetRequested,
+    clearStopRequest,
+    clearResetRequest,
+
+    clearMessages,
+    clearWhiteboard,
   } = useTutorStore();
 
-  const { isSupported: sttSupported, interimTranscript, startListening, stopListening } =
-    useSpeechRecognition();
+  const {
+    isSupported: sttSupportedRaw,
+    interimTranscript,
+    startListening,
+    stopListening,
+  } = useSpeechRecognition();
+
+  // IMPORTANT: decide STT support only after mount to prevent SSR/client mismatch
+  const sttSupported = mounted ? sttSupportedRaw : false;
+
   const { speak, cancel: cancelSpeech } = useSpeechSynthesis();
   const { isLoading, sendMessage } = useTutorApi();
   const { scheduleCommands, cancelSchedule } = useWhiteboardSync();
@@ -59,6 +85,49 @@ export default function Home() {
       startSession();
     }
   }, [startSession]);
+
+  // ✅ Pause/Stop everything immediately (speech + whiteboard schedule + listening)
+  const stopAllAudioAndListening = useCallback(async () => {
+    // Stop speech + scheduled whiteboard playback
+    cancelSpeech();
+    cancelSchedule();
+
+    // If listening, stop STT
+    if (voiceState === 'listening') {
+      try {
+        await stopListening();
+      } catch {
+        // ignore
+      }
+    }
+
+    setVoiceState('idle');
+  }, [cancelSpeech, cancelSchedule, setVoiceState, stopListening, voiceState]);
+
+  // ✅ Reset for next problem (stop everything + clear chat + clear whiteboard)
+  const resetSession = useCallback(async () => {
+    await stopAllAudioAndListening();
+    clearMessages();
+    clearWhiteboard();
+    setInterimTranscript('');
+    setVoiceState('idle');
+  }, [stopAllAudioAndListening, clearMessages, clearWhiteboard, setInterimTranscript, setVoiceState]);
+
+  // ✅ React to header buttons (requestStop / requestReset)
+  useEffect(() => {
+    if (stopRequested) {
+      // fire-and-forget; we clear the flag right away
+      stopAllAudioAndListening();
+      clearStopRequest();
+    }
+  }, [stopRequested, stopAllAudioAndListening, clearStopRequest]);
+
+  useEffect(() => {
+    if (resetRequested) {
+      resetSession();
+      clearResetRequest();
+    }
+  }, [resetRequested, resetSession, clearResetRequest]);
 
   // Process student message through the tutor API
   const processStudentMessage = useCallback(
@@ -94,7 +163,6 @@ export default function Home() {
 
       if (!response) {
         setVoiceState('idle');
-        // Add error message
         addMessage({
           id: generateId(),
           role: 'tutor',
@@ -123,10 +191,16 @@ export default function Home() {
         recordError(currentTopicId, response.errorAnalysis);
       }
 
-      // Speak response and sync whiteboard
-      setVoiceState('speaking');
+      // Always show whiteboard content (either scheduled during speech, or applied immediately)
+      if (!speakEnabled) {
+        // ✅ Voice OFF: show whiteboard immediately, don’t speak
+        setWhiteboardCommands(response.whiteboard);
+        setVoiceState('idle');
+        return;
+      }
 
-      // Schedule whiteboard commands to appear during speech
+      // ✅ Voice ON: speak + schedule whiteboard during speech
+      setVoiceState('speaking');
       scheduleCommands(response.whiteboard, response.message, setWhiteboardCommands);
 
       try {
@@ -135,39 +209,55 @@ export default function Home() {
         // Speech canceled or errored
       }
 
-      // After speaking, auto-listen if expects response
-      if (response.expectsResponse && sttSupported) {
-        setVoiceState('listening');
-        startListening();
-      } else {
-        setVoiceState('idle');
-      }
+      // Manual push-to-talk only: ALWAYS return to idle
+      setVoiceState('idle');
     },
     [
-      messages, mode, currentTopicId, profile, speechRate, sttSupported,
-      addMessage, setVoiceState, sendMessage, applyTopicUpdate, recordError,
-      scheduleCommands, setWhiteboardCommands, speak, startListening,
+      messages,
+      mode,
+      currentTopicId,
+      profile,
+      speechRate,
+      speakEnabled,
+      addMessage,
+      setVoiceState,
+      sendMessage,
+      applyTopicUpdate,
+      recordError,
+      scheduleCommands,
+      setWhiteboardCommands,
+      speak,
+      setInterimTranscript,
+      setWhiteboardCommands,
     ]
   );
 
   // Handle mic button press
   const handleMicPress = useCallback(async () => {
+    if (!sttSupported) return;
+
     if (voiceState === 'listening') {
-      // Stop listening, process message
       const transcript = await stopListening();
       processStudentMessage(transcript);
     } else if (voiceState === 'speaking') {
-      // Interrupt speech
+      // Interrupt speech, then go to idle (manual push-to-talk)
       cancelSpeech();
       cancelSchedule();
-      setVoiceState('listening');
-      startListening();
+      setVoiceState('idle');
     } else if (voiceState === 'idle') {
-      // Start listening
       setVoiceState('listening');
       startListening();
     }
-  }, [voiceState, stopListening, processStudentMessage, cancelSpeech, cancelSchedule, setVoiceState, startListening]);
+  }, [
+    sttSupported,
+    voiceState,
+    stopListening,
+    processStudentMessage,
+    cancelSpeech,
+    cancelSchedule,
+    setVoiceState,
+    startListening,
+  ]);
 
   // Handle text input (fallback)
   const handleTextSubmit = useCallback(
@@ -189,14 +279,8 @@ export default function Home() {
           handleMicPress();
           break;
         case 'Escape':
-          if (voiceState === 'speaking') {
-            cancelSpeech();
-            cancelSchedule();
-            setVoiceState('idle');
-          } else if (voiceState === 'listening') {
-            stopListening();
-            setVoiceState('idle');
-          }
+          // ESC = Pause/Stop immediately
+          stopAllAudioAndListening();
           break;
         case 'KeyD':
           if (!e.metaKey && !e.ctrlKey) {
@@ -208,7 +292,7 @@ export default function Home() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleMicPress, voiceState, cancelSpeech, cancelSchedule, setVoiceState, stopListening, setShowDashboard]);
+  }, [handleMicPress, stopAllAudioAndListening, setShowDashboard]);
 
   return (
     <>
@@ -220,11 +304,7 @@ export default function Home() {
             <VoiceIndicator voiceState={voiceState} />
 
             {sttSupported ? (
-              <MicButton
-                voiceState={voiceState}
-                onPress={handleMicPress}
-                disabled={isLoading}
-              />
+              <MicButton voiceState={voiceState} onPress={handleMicPress} disabled={isLoading} />
             ) : (
               <TextInput
                 onSubmit={handleTextSubmit}
@@ -232,6 +312,32 @@ export default function Home() {
                 placeholder="Type your math question..."
               />
             )}
+
+            {/* ✅ NEW: Pause (left of the speaker control) */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => stopAllAudioAndListening()}
+              title="Pause / stop speaking"
+            >
+              <PauseCircle className="h-4 w-4" />
+              Pause
+            </Button>
+
+            {/* ✅ NEW: Speak toggle */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setSpeakEnabled((v) => !v)}
+              title={speakEnabled ? 'Turn voice OFF (text-only)' : 'Turn voice ON'}
+            >
+              {speakEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+              {speakEnabled ? 'Voice: On' : 'Voice: Off'}
+            </Button>
 
             <VolumeControl rate={speechRate} onRateChange={setSpeechRate} />
 

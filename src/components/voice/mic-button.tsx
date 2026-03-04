@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Mic, Square, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { VoiceState } from '@/lib/types/tutor';
@@ -12,14 +13,24 @@ interface MicButtonProps {
 }
 
 export function MicButton({ voiceState, onPress, disabled }: MicButtonProps) {
-  const isListening = voiceState === 'listening';
-  const isProcessing = voiceState === 'processing';
-  const isSpeaking = voiceState === 'speaking';
+  // Hydration guard: ensure the first render matches SSR output.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  // Use a safe, deterministic UI until after mount to avoid mismatches.
+  const safeVoiceState: VoiceState = mounted ? voiceState : 'idle';
+
+  const isListening = safeVoiceState === 'listening';
+  const isProcessing = safeVoiceState === 'processing';
+  const isSpeaking = safeVoiceState === 'speaking';
+
+  // Also keep disabled deterministic on the first paint.
+  const effectiveDisabled = mounted ? (disabled || isProcessing) : true;
 
   return (
-    <div className="relative">
-      {/* Pulse rings when listening */}
-      {isListening && (
+    <div className="relative" suppressHydrationWarning>
+      {/* Pulse rings when listening (only after mount to avoid SSR/client differences) */}
+      {mounted && isListening && (
         <>
           <motion.div
             className="absolute inset-0 rounded-full bg-red-500/20"
@@ -37,7 +48,7 @@ export function MicButton({ voiceState, onPress, disabled }: MicButtonProps) {
       <Button
         size="lg"
         onClick={onPress}
-        disabled={disabled || isProcessing}
+        disabled={effectiveDisabled}
         className={`relative z-10 w-14 h-14 rounded-full transition-all duration-200 ${
           isListening
             ? 'bg-red-500 hover:bg-red-600 text-white'

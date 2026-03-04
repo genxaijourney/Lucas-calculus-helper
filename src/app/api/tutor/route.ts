@@ -139,7 +139,22 @@ export async function POST(request: NextRequest) {
     const { messages, mode, difficulty, currentTopicId, studentWeaknesses } = body;
 
     const topicName = currentTopicId; // Will be resolved to name on client side
-    const systemPrompt = buildSystemPrompt(mode, difficulty, topicName, studentWeaknesses);
+
+    // ✅ Personalization: make the tutor consistently address Lucas by name.
+    const studentName = 'Lucas';
+    const personalization = `
+Student profile:
+- The student’s name is ${studentName}.
+- Address the student as "${studentName}" naturally (especially in the first sentence).
+- Keep it friendly and encouraging. Don't overuse the name (once per response is enough).
+`.trim();
+
+    const systemPrompt = `${buildSystemPrompt(
+      mode,
+      difficulty,
+      topicName,
+      studentWeaknesses
+    )}\n\n${personalization}`;
 
     // Convert our messages to Anthropic format
     const anthropicMessages = messages.map((msg) => ({
@@ -167,9 +182,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(tutorResponse);
   } catch (error) {
     console.error('Tutor API error:', error);
-    return NextResponse.json(
-      { error: 'Failed to get tutor response' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to get tutor response' }, { status: 500 });
   }
 }

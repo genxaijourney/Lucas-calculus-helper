@@ -9,6 +9,8 @@ export function WelcomeScreen() {
   const showWelcome = useTutorStore((s) => s.showWelcome);
   const setShowWelcome = useTutorStore((s) => s.setShowWelcome);
 
+  const studentName = 'Lucas';
+
   return (
     <Dialog open={showWelcome} onOpenChange={setShowWelcome}>
       <DialogContent className="max-w-lg">
@@ -20,10 +22,13 @@ export function WelcomeScreen() {
           </div>
 
           <div>
-            <h2 className="text-2xl font-bold mb-2">Welcome to MathVoice</h2>
+            <h2 className="text-2xl font-bold mb-2">
+              Welcome, {studentName} 👋
+            </h2>
             <p className="text-muted-foreground text-sm">
-              Your voice-first AI math tutor. Talk naturally — I&apos;ll listen,
-              guide you with questions, and show you the math on the whiteboard.
+              This is <span className="font-medium">Lucas&apos;s Calculus Tutor</span>.
+              Talk naturally — I&apos;ll listen, guide you step-by-step, and show the
+              math on the whiteboard.
             </p>
           </div>
 
@@ -46,7 +51,7 @@ export function WelcomeScreen() {
             <Feature
               icon={BarChart3}
               title="Track Progress"
-              description="Your mastery grows across 30 topics"
+              description="See progress as you practice"
             />
           </div>
 
@@ -54,9 +59,9 @@ export function WelcomeScreen() {
             <p className="text-xs text-muted-foreground">Try saying:</p>
             <div className="flex flex-wrap gap-2 justify-center">
               {[
-                '"Teach me about derivatives"',
-                '"I need help with fractions"',
-                '"What is the quadratic formula?"',
+                '"Help me find the derivative of 3x^2 + 5x - 7"',
+                '"Explain limits like I’m 15"',
+                '"Walk me through chain rule step by step"',
               ].map((phrase) => (
                 <span
                   key={phrase}
@@ -68,11 +73,7 @@ export function WelcomeScreen() {
             </div>
           </div>
 
-          <Button
-            size="lg"
-            className="w-full"
-            onClick={() => setShowWelcome(false)}
-          >
+          <Button size="lg" className="w-full" onClick={() => setShowWelcome(false)}>
             Get Started
           </Button>
 

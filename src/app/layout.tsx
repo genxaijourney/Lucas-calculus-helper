@@ -13,8 +13,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MathVoice — AI Math Tutor",
-  description: "Voice-first AI math tutor with live whiteboard",
+  title: "Lucas's Calculus Tutor",
+  description: "Lucas's personal AI calculus tutor with voice interaction and live whiteboard",
 };
 
 export default function RootLayout({

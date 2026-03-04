@@ -9,7 +9,13 @@ import {
   TopicUpdate,
   ErrorAnalysis,
 } from '../types/tutor';
-import { loadProfile, saveProfile, applyTopicUpdate, recordError, updateStreak } from '../knowledge/student-model';
+import {
+  loadProfile,
+  saveProfile,
+  applyTopicUpdate,
+  recordError,
+  updateStreak,
+} from '../knowledge/student-model';
 import { STORAGE_KEY_WELCOME } from '../constants';
 
 interface TutorActions {
@@ -42,6 +48,12 @@ interface TutorActions {
   setShowWelcome: (show: boolean) => void;
   setSpeechRate: (rate: number) => void;
 
+  // ✅ New: global requests (header buttons can trigger; page.tsx performs)
+  requestStop: () => void;
+  requestReset: () => void;
+  clearStopRequest: () => void;
+  clearResetRequest: () => void;
+
   // Init
   initializeFromStorage: () => void;
 }
@@ -67,6 +79,10 @@ export const useTutorStore = create<TutorState & TutorActions>((set, get) => ({
   showWelcome: true,
   speechRate: 1,
 
+  // ✅ New: request flags
+  stopRequested: false,
+  resetRequested: false,
+
   // Voice actions
   setVoiceState: (voiceState) => set({ voiceState }),
   setInterimTranscript: (interimTranscript) => set({ interimTranscript }),
@@ -82,8 +98,7 @@ export const useTutorStore = create<TutorState & TutorActions>((set, get) => ({
   },
 
   // Message actions
-  addMessage: (message) =>
-    set((state) => ({ messages: [...state.messages, message] })),
+  addMessage: (message) => set((state) => ({ messages: [...state.messages, message] })),
   clearMessages: () => set({ messages: [], activeWhiteboardCommands: [] }),
 
   // Whiteboard actions
@@ -128,6 +143,12 @@ export const useTutorStore = create<TutorState & TutorActions>((set, get) => ({
     set({ showWelcome });
   },
   setSpeechRate: (speechRate) => set({ speechRate }),
+
+  // ✅ New: request actions
+  requestStop: () => set({ stopRequested: true }),
+  requestReset: () => set({ resetRequested: true }),
+  clearStopRequest: () => set({ stopRequested: false }),
+  clearResetRequest: () => set({ resetRequested: false }),
 
   // Init
   initializeFromStorage: () => {
