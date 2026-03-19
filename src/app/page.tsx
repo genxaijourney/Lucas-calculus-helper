@@ -5,8 +5,9 @@ import { MainLayout } from '@/components/layout/main-layout';
 import { Whiteboard } from '@/components/whiteboard/whiteboard';
 import { ConversationPanel } from '@/components/conversation/conversation-panel';
 import { MicButton } from '@/components/voice/mic-button';
-import { VolumeControl } from '@/components/voice/volume-control';
+import { SpeedControl } from '@/components/voice/speed-control';
 import { VoiceIndicator } from '@/components/voice/voice-indicator';
+import { VoiceSelector } from '@/components/voice/voice-selector';
 import { TextInput } from '@/components/voice/text-input';
 import { KnowledgeDashboard } from '@/components/dashboard/knowledge-map';
 import { TopicSelector } from '@/components/session/topic-selector';
@@ -26,9 +27,23 @@ export default function Home() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  // Local UI preference: speak on/off
+  // Local UI preferences
   // Keep it local so we don’t introduce new SSR/localStorage hydration issues.
   const [speakEnabled, setSpeakEnabled] = useState(true);
+  const [selectedVoice, setSelectedVoice] = useState('en-US-Neural2-J');
+
+  // Safely read from localStorage after mount to avoid hydration mismatch
+  useEffect(() => {
+    const savedVoice = localStorage.getItem('mathvoice_voice');
+    if (savedVoice) {
+      setSelectedVoice(savedVoice);
+    }
+  }, []);
+
+  const handleVoiceChange = useCallback((voiceId: string) => {
+    setSelectedVoice(voiceId);
+    localStorage.setItem('mathvoice_voice', voiceId);
+  }, []);
 
   const {
     voiceState,
@@ -204,7 +219,7 @@ export default function Home() {
       scheduleCommands(response.whiteboard, response.message, setWhiteboardCommands);
 
       try {
-        await speak(response.message, speechRate);
+        await speak(response.message, speechRate, selectedVoice);
       } catch {
         // Speech canceled or errored
       }
@@ -219,6 +234,7 @@ export default function Home() {
       profile,
       speechRate,
       speakEnabled,
+      selectedVoice,
       addMessage,
       setVoiceState,
       sendMessage,
@@ -228,7 +244,6 @@ export default function Home() {
       setWhiteboardCommands,
       speak,
       setInterimTranscript,
-      setWhiteboardCommands,
     ]
   );
 
@@ -339,7 +354,13 @@ export default function Home() {
               {speakEnabled ? 'Voice: On' : 'Voice: Off'}
             </Button>
 
-            <VolumeControl rate={speechRate} onRateChange={setSpeechRate} />
+            <SpeedControl rate={speechRate} onRateChange={setSpeechRate} />
+
+            <VoiceSelector 
+              value={selectedVoice} 
+              onChange={handleVoiceChange} 
+              disabled={isLoading || voiceState === 'processing' || voiceState === 'speaking'} 
+            />
 
             {/* Text fallback alongside mic for convenience */}
             {sttSupported && (
