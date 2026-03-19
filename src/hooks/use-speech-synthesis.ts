@@ -39,7 +39,7 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
       audioRef.current.removeAttribute('src');
       try {
         audioRef.current.load();
-      } catch (e) {}
+      } catch {}
       audioRef.current = null;
     }
 
@@ -104,7 +104,7 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
           cleanupAndResolve();
         };
 
-        audio.onerror = (e) => {
+        audio.onerror = () => {
           onEndOrError();
           setIsSpeaking(false);
           resolverRef.current = null;
@@ -112,9 +112,9 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
         };
 
         await audio.play();
-      } catch (error: any) {
+      } catch (error: unknown) {
         setIsSpeaking(false);
-        if (error.name === 'AbortError') {
+        if (error instanceof Error && error.name === 'AbortError') {
           // fetch was aborted, consider it resolved
           cleanupAndResolve();
         } else {

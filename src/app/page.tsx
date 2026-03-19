@@ -243,7 +243,6 @@ export default function Home() {
       scheduleCommands,
       setWhiteboardCommands,
       speak,
-      setInterimTranscript,
     ]
   );
 

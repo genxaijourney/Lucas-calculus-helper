@@ -59,16 +59,16 @@ export async function POST(request: NextRequest) {
       throw new Error('No audio content returned from Google Cloud TTS');
     }
 
-    return new NextResponse(response.audioContent as any, {
+    return new NextResponse(response.audioContent as unknown as BodyInit, {
       headers: {
         'Content-Type': 'audio/mpeg',
         'Cache-Control': 'no-store, max-age=0',
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('TTS API error:', error);
     return NextResponse.json(
-      { error: error.message || 'TTS generation failed' },
+      { error: error instanceof Error ? error.message : 'TTS generation failed' },
       { status: 500 }
     );
   }

@@ -1,5 +1,3 @@
-import { SelectHTMLAttributes } from 'react';
-
 export const VOICES = [
   { id: 'en-US-Neural2-J', label: 'Teen Male' },
   { id: 'en-US-Neural2-F', label: 'Clear Female' },
